@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+
+    <%- include('partials/styles.ejs') %>
+  </head>
+  <body>
+    <%- include('partials/navbar.ejs') %>
+
+    <div class="container-sm">
+      <div class="row">
+        <div class="col-md-3 col-lg-6">
+          <h1>Login</h1>
+        </div>
+        <div class="col-md-9 col-lg-6">
+          <p class="mb-4">Don't have an account? <a href="/signup">Click here to signup.</a></p>
+          <form action="/login" method="POST">
+            <div class="input-group mb-3">
+              <div class="input-group-prepend w-25">
+                <span class="input-group-text w-100" id="basic-addon3">Username</span>
+              </div>
+              <input
+                class="form-control"
+                type="text"
+                id="username"
+                name="username"
+                placeholder="Username"
+              />
+            </div>
+            <div class="input-group mb-3">
+              <div class="input-group-prepend w-25">
+                <span class="input-group-text w-100" id="basic-addon3">Password</span>
+              </div>
+              <input
+                class="form-control"
+                type="password"
+                id="password"
+                name="password"
+                placeholder="Password"
+              />
+            </div>
+            <input type="submit" class="btn btn-primary btn-block mb-2" value="Login" />
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <%- include('partials/scripts.ejs') %>
+  </body>
+</html>

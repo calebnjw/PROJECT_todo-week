@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+
+    <%- include('partials/styles.ejs') %>
+  </head>
+  <body>
+    <%- include('partials/navbar.ejs') %>
+
+    <div class="container">
+      <h1>To Do</h1>
+      <hr />
+      <button type="button" class="btn btn-primary" onclick="window.location.href='/note'">
+        New Note
+      </button>
+      <hr />
+      <% notes.forEach((note) => { %>
+      <!-- Making use of the actual id of notes, so they may not always be sequential -->
+      <h3>
+        <a href="/note/<%= note.note_id %>">
+          <%= note.note_id %>. <%= note.date %>, <%= note.habitat %>
+        </a>
+      </h3>
+      <br />
+      <hr />
+      <% }) %>
+    </div>
+
+    <%- include('partials/scripts.ejs') %>
+  </body>
+</html>
