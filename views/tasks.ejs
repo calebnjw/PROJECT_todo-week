@@ -11,24 +11,33 @@
   <body>
     <%- include('partials/navbar-logout.ejs') %>
 
-    <div class="container">
+    <div class="container-flex">
       <!-- THIS ROW IS FOR THE DATES -->
       <div class="row">
         <div class="text-center col-1 mb-3">
           <button class="btn btn-outline-primary mr-3" type="button">⬅️</button>
         </div>
-        <div class="col-10 mb-3">
+        <% tasks.dates.forEach((date) => { %>
+        <div class="col-2 mb-3">
           <div class="row">
             <div class="col-12 text-center mb-3">
-              <div>TODAY'S LIST</div>
-              <div>20/5/2022</div>
+              <h3><%= date.weekday %></h3>
+              <h5><%= date.date %></h5>
             </div>
             <div class="col-12 mb-3">
-              <% if (tasks.length !== 0) { %>
+              <!-- if there are tasks to be displayed and don't belong in a list -->
+              <% if (tasks.length !== 0 && tasks.list_id === undefined) { %>
               <ul class="list-group">
-                <% if (tasks.list_id === undefined) { %> <% tasks.forEach((task) => { %> <% if
-                (task.task_state === true) { %>
+                <!-- iterate through each task in the array -->
+                <% tasks.forEach((task) => { %>
+                <!-- check that the date on the task matches the current date on the list -->
+                <% if (task.task_date === date.date) { %>
+                <!-- temporary stuff (to delete later) -->
+                <% console.log('date on task', task.task_date); %> <% console.log('date on list',
+                date); %>
+
                 <!-- if tasks is completed, render this list style: -->
+                <% if (task.task_state === true) { %>
                 <li class="list-group-item task-complete">
                   <span class="btn-group">
                     <form
@@ -36,7 +45,7 @@
                       action="/tasks/<%= task.task_id %>/complete?_method=PUT"
                       method="POST"
                     >
-                      <input class="mr-1" type="submit" value="⭕" />
+                      <input class="mr-1" type="submit" value="✔️" />
                     </form>
                     <form class="" action="/tasks/<%= task.task_id %>?_method=DELETE" method="POST">
                       <input class="mr-3" type="submit" value="🗑️" />
@@ -53,7 +62,7 @@
                       action="/tasks/<%= task.task_id %>/complete?_method=PUT"
                       method="POST"
                     >
-                      <input class="mr-1" type="submit" name="complete" value="✔️" />
+                      <input class="mr-1" type="submit" name="complete" value="⭕" />
                     </form>
                     <form class="" action="/tasks/<%= task.task_id %>?_method=DELETE" method="POST">
                       <input class="mr-3" type="submit" name="delete" value="🗑️" />
@@ -61,21 +70,28 @@
                   </span>
                   <%= task.task %>
                 </li>
-                <% } %> <% }) %> <% } %>
+                <!-- close 'completed state' if else -->
+                <% } %>
+                <!-- close 'date comparison' if else -->
+                <% } %>
+                <!-- close 'tasks iteration' forEach -->
+                <% }) %>
               </ul>
+              <!-- close 'list checking' if else -->
               <% } %>
-              <form class="" action="/tasks" method="POST">
+              <form class="" action="/tasks/<%= date.date %>" method="POST">
                 <input
                   class="list-group-item form-control py-4"
                   type="text"
                   id="todo"
                   name="todo"
-                  placeholder="Type your next todo here"
+                  placeholder="Todo"
                 />
               </form>
             </div>
           </div>
         </div>
+        <% }) %>
         <div class="text-center col-1 mb-3">
           <button class="btn btn-outline-primary mr-3" type="button">➡️</button>
         </div>

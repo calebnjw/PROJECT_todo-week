@@ -30,6 +30,11 @@
 // read and write files
 // import { readFile, writeFile } from 'fs';
 
+/* Luxon for date / time */
+import { DateTime } from 'luxon';
+const dayFormat = { weekday: 'long' };
+const dateFormat = { day: 'numeric', month: 'numeric', year: 'numeric' };
+
 // ------------------------------ //
 // setting up app---------------- //
 // ------------------------------ //
@@ -179,11 +184,39 @@ app.get('/tasks', (request, response) => {
 
     const { userID } = request.cookies;
     const getTodoQuery = `SELECT * FROM tasks WHERE user_id=${userID} ORDER BY task_id;`;
+    // now I need to make an inner join thing happen
+    // to display all the different lists that this person has
 
     pool.query(getTodoQuery)
       .then((result) => {
         const tasks = result.rows;
-        tasks.loggedIn = request.isUserLoggedIn;
+
+        // this needs to be moved out of here so that 
+        // I can manipulate it later on to display previous / later dates. 
+        // but it works for now. so happy. 😭
+        const today = DateTime.now();
+        tasks.dates = [
+          {
+            weekday: today.minus({ days: 1 }).toLocaleString(dayFormat),
+            date: today.minus({ days: 1 }).setLocale('en-GB').toLocaleString(dateFormat)
+          },
+          {
+            weekday: today.setLocale('en-GB').toLocaleString(dayFormat),
+            date: today.setLocale('en-GB').toLocaleString(dateFormat)
+          },
+          {
+            weekday: today.plus({ days: 1 }).toLocaleString(dayFormat),
+            date: today.plus({ days: 1 }).setLocale('en-GB').toLocaleString(dateFormat)
+          },
+          {
+            weekday: today.plus({ days: 2 }).toLocaleString(dayFormat),
+            date: today.plus({ days: 2 }).setLocale('en-GB').toLocaleString(dateFormat)
+          },
+          {
+            weekday: today.plus({ days: 3 }).toLocaleString(dayFormat),
+            date: today.plus({ days: 3 }).setLocale('en-GB').toLocaleString(dateFormat)
+          }
+        ];
 
         response.render('tasks', { tasks });
       })
@@ -193,18 +226,19 @@ app.get('/tasks', (request, response) => {
   }
 });
 
-app.post('/tasks', (request, response) => { // creating new task
+app.post('/tasks/:day/:month/:year', (request, response) => { // creating new task
   console.log('POST: TASKS')
 
+  const { month, day, year } = request.params;
+  const date = `${day}/${month}/${year}`
   const { userID } = request.cookies;
   const { todo } = request.body;
   const createTodoQuery = `INSERT INTO tasks 
-    (user_id, task, task_state) 
-    VALUES ('${userID}', '${todo}', false);`;
+    (user_id, task, task_date, task_state) 
+    VALUES ('${userID}', '${todo}', '${date}', false);`;
 
   pool.query(createTodoQuery)
     .then((result) => {
-      tasks = result.rows;
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
         response.redirect('/tasks');
       }, 50);
