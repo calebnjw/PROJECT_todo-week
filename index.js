@@ -82,11 +82,12 @@ const getHashed = (input) => {
   return output;
 };
 
+
 // ------------------------------ //
 // route: home------------------- //
 // ------------------------------ //
 app.get('/', (request, response) => {
-  response.redirect('login');
+  response.redirect('/tasks');
 })
 
 // ------------------------------ //
@@ -104,7 +105,7 @@ app.post('/signup', (request, response) => {
   const hashedPassword = getHashed(password); // hashing password entered
   const signupQuery = `INSERT INTO users 
     (first_name, last_name, username, password)
-    VALUES ('${first_name}', '${last_name}', '${username}', '${hashedPassword}')`
+    VALUES ('${first_name}', '${last_name}', '${username}', '${hashedPassword}');`;
 
   pool.query(signupQuery); // save user to databse
 
@@ -123,9 +124,12 @@ app.post('/login', (request, response) => {
   console.log('POST: LOGIN');
 
   const { username, password } = request.body; // contents of login form
-  const loginQuery = `SELECT password FROM users WHERE username='${username}'`
+  const loginQuery = `SELECT user_id, password FROM users WHERE username='${username}';`;
 
-  pool.query(loginQuery) // look up data from users
+  console.log('QUERYING');
+
+  // look up data from users
+  pool.query(loginQuery)
     .then((result) => {
       if (result.rows.length === 0) { // no matching username
         console.log('Wrong username or password. Try again.');
@@ -134,63 +138,125 @@ app.post('/login', (request, response) => {
       }
 
       const enteredPassword = getHashed(password); // hash what the user has keyed in
-      const { password: savedPassword } = result.rows[0] // get the hash from matching username
+      const { user_id, password: savedPassword } = result.rows[0] // get the hash from matching username
 
       if (enteredPassword !== savedPassword) { // hashed passwords don't match
         console.log('Wrong username or password. Try again.');
         response.status(403).send('Wrong username or password. Try again.');
         return;
       } else { // hashed passwords match
-        console.log('Successfully logged in.')
+        console.log('Successfully logged in.');
         response.cookie('loggedIn', true); // set a cookie with login status
+        response.cookie('userID', user_id); // set a cookie with login status
         response.redirect('/tasks'); // redirect them to todo list
       }
     })
+    .catch((error) => {
+      console.log(error);
+      response.send(error);
+    });
+});
+
+// ------------------------------ //
+// middleware: user auth--------- //
+// ------------------------------ //
+app.use((request, response, next) => {
+  request.isUserLoggedIn = false;
+
+  if (request.cookies.loggedIn && request.cookies.userID) {
+    request.isUserLoggedIn = true;
+  }
+
+  next();
 });
 
 // ------------------------------ //
 // route: todo------------------- //
 // ------------------------------ //
 app.get('/tasks', (request, response) => {
-  console.log('GET: TASKS');
+  if (request.isUserLoggedIn) {
+    console.log('GET: TASKS');
 
-  const getTodoQuery = `SELECT * FROM tasks`;
-  // const getTodoQuery = `SELECT * FROM tasks WHERE user_id='${user_id}'`;
+    const { userID } = request.cookies;
+    const getTodoQuery = `SELECT * FROM tasks WHERE user_id=${userID} ORDER BY task_id;`;
 
-  pool.query(getTodoQuery)
-    .then((result) => {
-      const tasks = result.rows;
+    pool.query(getTodoQuery)
+      .then((result) => {
+        const tasks = result.rows;
+        tasks.loggedIn = request.isUserLoggedIn;
 
-      response.render('tasks', { tasks });
-    })
+        response.render('tasks', { tasks });
+      })
+  } else {
+    console.log('Not logged in, redirecting to login page.')
+    response.status(403).redirect('login');
+  }
 });
 
 app.post('/tasks', (request, response) => { // creating new task
   console.log('POST: TASKS')
 
+  const { userID } = request.cookies;
   const { todo } = request.body;
   const createTodoQuery = `INSERT INTO tasks 
-    (task, task_state) 
-    VALUES ('${todo}', false)`
+    (user_id, task, task_state) 
+    VALUES ('${userID}', '${todo}', false);`;
 
-  pool.query(createTodoQuery);
-  response.redirect('/tasks');
+  pool.query(createTodoQuery)
+    .then((result) => {
+      tasks = result.rows;
+      setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
+        response.redirect('/tasks');
+      }, 50);
+    })
+
 });
 
-app.put('/tasks/:index/complete', (request, response) => { // editing existing task
-  console.log('PUT: TASKS')
+app.put('/tasks/:task_id/complete', (request, response) => { // editing existing task
+  console.log('PUT: TASKS');
+  const { task_id } = request.params;
+  const checkCompleteQuery = `SELECT task_state FROM tasks WHERE task_id=${task_id};`;
+
+  pool.query(checkCompleteQuery)
+    .then((result) => {
+      let changeStatusQuery = `UPDATE tasks SET task_state=true WHERE task_id=${task_id};`;
+      if (result.rows[0].task_state === false) {
+        pool.query(changeStatusQuery);
+      } else {
+        changeStatusQuery = `UPDATE tasks SET task_state=false WHERE task_id=${task_id};`;
+        pool.query(changeStatusQuery);
+      }
+      setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
+        response.redirect('/tasks');
+      }, 50);
+    })
 });
 
 app.delete('/tasks/:task_id', (request, response) => { // delete existing task
   console.log('DEL: TASKS')
   const { task_id } = request.params;
-
-  const deleteTodoQuery = `DELETE FROM tasks WHERE task_id='${task_id}';`
+  const deleteTodoQuery = `DELETE FROM tasks WHERE task_id='${task_id}';`;
 
   pool.query(deleteTodoQuery);
-  response.redirect('/tasks')
+
+  setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly
+    response.redirect('/tasks')
+  }, 50);
 });
 
+// ------------------------------ //
+// route: logout----------------- //
+// ------------------------------ //
+app.delete('/logout', (request, response) => { // delete existing task
+  if (request.isUserLoggedIn) {
+    response.clearCookie('loggedIn');
+    response.clearCookie('userID');
+  }
+
+  setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly
+    response.redirect('/login')
+  }, 50);
+});
 
 // ------------------------------ //
 // setting up server------------- //

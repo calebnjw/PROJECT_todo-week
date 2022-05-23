@@ -9,9 +9,10 @@
     <%- include('partials/styles.ejs') %>
   </head>
   <body>
-    <%- include('partials/navbar.ejs') %>
+    <%- include('partials/navbar-logout.ejs') %>
 
     <div class="container">
+      <!-- THIS ROW IS FOR THE DATES -->
       <div class="row">
         <div class="text-center col-1 mb-3">
           <button class="btn btn-outline-primary mr-3" type="button">⬅️</button>
@@ -23,25 +24,44 @@
               <div>20/5/2022</div>
             </div>
             <div class="col-12 mb-3">
-              <% if (tasks !== 0) { %>
+              <% if (tasks.length !== 0) { %>
               <ul class="list-group">
-                <% tasks.forEach((task) => { %>
-                <li class="list-group-item">
+                <% if (tasks.list_id === undefined) { %> <% tasks.forEach((task) => { %> <% if
+                (task.task_state === true) { %>
+                <!-- if tasks is completed, render this list style: -->
+                <li class="list-group-item task-complete">
                   <span class="btn-group">
                     <form
                       class=""
                       action="/tasks/<%= task.task_id %>/complete?_method=PUT"
                       method="POST"
                     >
-                      <input class="btn btn-outline-success mr-3" type="submit" value="✔️" />
+                      <input class="mr-1" type="submit" value="⭕" />
                     </form>
                     <form class="" action="/tasks/<%= task.task_id %>?_method=DELETE" method="POST">
-                      <input class="btn btn-outline-danger mr-3" type="submit" value="❌" />
+                      <input class="mr-3" type="submit" value="🗑️" />
                     </form>
                   </span>
                   <%= task.task %>
                 </li>
-                <% }) %>
+                <% } else { %>
+                <!-- if not, render this list style: -->
+                <li class="list-group-item justify-content-between">
+                  <span class="btn-group">
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>/complete?_method=PUT"
+                      method="POST"
+                    >
+                      <input class="mr-1" type="submit" name="complete" value="✔️" />
+                    </form>
+                    <form class="" action="/tasks/<%= task.task_id %>?_method=DELETE" method="POST">
+                      <input class="mr-3" type="submit" name="delete" value="🗑️" />
+                    </form>
+                  </span>
+                  <%= task.task %>
+                </li>
+                <% } %> <% }) %> <% } %>
               </ul>
               <% } %>
               <form class="" action="/tasks" method="POST">
@@ -60,6 +80,12 @@
           <button class="btn btn-outline-primary mr-3" type="button">➡️</button>
         </div>
       </div>
+
+      <!-- THIS ROW IS FOR THE OTHER LISTS -->
+      <!-- select from 'list_users' by 'user_id', and inner join to 'lists' -->
+      <!-- for the first two lists, create one column each -->
+      <!-- buttons on the side to show next / previous list columns -->
+      <div class="row"></div>
     </div>
 
     <%- include('partials/scripts.ejs') %>
