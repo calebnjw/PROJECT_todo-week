@@ -9,13 +9,26 @@
     <%- include('partials/styles.ejs') %>
   </head>
   <body>
+    <script>
+      let n = Number("<%= n %>");
+
+      const plusN = () => {
+        n = n + 1;
+        window.location.href = `/tasks?n=${n}`;
+      };
+
+      const minusN = () => {
+        n = n - 1;
+        window.location.href = `/tasks?n=${n}`;
+      };
+    </script>
     <%- include('partials/navbar-logout.ejs') %>
 
     <div class="container-flex">
       <!-- THIS ROW IS FOR THE DATES -->
       <div class="row">
         <div class="text-center col-1 mb-3">
-          <button class="btn btn-outline-primary mr-3" type="button">⬅️</button>
+          <button class="btn btn-outline-primary mr-3" type="button" onclick="minusN()">⬅️</button>
         </div>
         <% tasks.dates.forEach((date) => { %>
         <div class="col-2 mb-3">
@@ -35,19 +48,22 @@
                 <!-- temporary stuff (to delete later) -->
                 <% console.log('date on task', task.task_date); %> <% console.log('date on list',
                 date); %>
-
                 <!-- if tasks is completed, render this list style: -->
                 <% if (task.task_state === true) { %>
                 <li class="list-group-item task-complete">
                   <span class="btn-group">
                     <form
                       class=""
-                      action="/tasks/<%= task.task_id %>/complete?_method=PUT"
+                      action="/tasks/<%= task.task_id %>/complete?_method=PUT&n=<%= n %>"
                       method="POST"
                     >
                       <input class="mr-1" type="submit" value="✔️" />
                     </form>
-                    <form class="" action="/tasks/<%= task.task_id %>?_method=DELETE" method="POST">
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>?_method=DELETE&n=<%= n %>"
+                      method="POST"
+                    >
                       <input class="mr-3" type="submit" value="🗑️" />
                     </form>
                   </span>
@@ -59,12 +75,16 @@
                   <span class="btn-group">
                     <form
                       class=""
-                      action="/tasks/<%= task.task_id %>/complete?_method=PUT"
+                      action="/tasks/<%= task.task_id %>/complete?_method=PUT&n=<%= n %>"
                       method="POST"
                     >
                       <input class="mr-1" type="submit" name="complete" value="⭕" />
                     </form>
-                    <form class="" action="/tasks/<%= task.task_id %>?_method=DELETE" method="POST">
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>?_method=DELETE&n=<%= n %>"
+                      method="POST"
+                    >
                       <input class="mr-3" type="submit" name="delete" value="🗑️" />
                     </form>
                   </span>
@@ -79,7 +99,7 @@
               </ul>
               <!-- close 'list checking' if else -->
               <% } %>
-              <form class="" action="/tasks/<%= date.date %>" method="POST">
+              <form class="" action="/tasks/<%= date.date %>?n=<%= n %>" method="POST">
                 <input
                   class="list-group-item form-control py-4"
                   type="text"
@@ -93,7 +113,7 @@
         </div>
         <% }) %>
         <div class="text-center col-1 mb-3">
-          <button class="btn btn-outline-primary mr-3" type="button">➡️</button>
+          <button class="btn btn-outline-primary mr-3" type="button" onclick="plusN()">➡️</button>
         </div>
       </div>
 

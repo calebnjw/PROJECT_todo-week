@@ -71,6 +71,11 @@ const pgConnectionConfigs = {
 const pool = new Pool(pgConnectionConfigs);
 
 // ------------------------------ //
+// global variables-------------- //
+// ------------------------------ //
+const today = DateTime.now();
+
+// ------------------------------ //
 // helper functions-------------- //
 // ------------------------------ //
 
@@ -86,7 +91,6 @@ const getHashed = (input) => {
 
   return output;
 };
-
 
 // ------------------------------ //
 // route: home------------------- //
@@ -107,14 +111,23 @@ app.post('/signup', (request, response) => {
   console.log('POST: SIGNUP');
 
   const { first_name, last_name, username, password } = request.body; // contents of signup form
-  const hashedPassword = getHashed(password); // hashing password entered
-  const signupQuery = `INSERT INTO users 
-    (first_name, last_name, username, password)
-    VALUES ('${first_name}', '${last_name}', '${username}', '${hashedPassword}');`;
+  const existingUserQuery = `SELECT user_id FROM users WHERE username = '${username}';`
 
-  pool.query(signupQuery); // save user to databse
+  pool.query(existingUserQuery)
+    .then((result) => {
+      if (result.rows.length !== 0) {
+        response.status(403).send('Username is in use.');
+      } else {
+        const hashedPassword = getHashed(password); // hashing password entered
+        const signupQuery = `INSERT INTO users 
+          (first_name, last_name, username, password)
+          VALUES ('${first_name}', '${last_name}', '${username}', '${hashedPassword}');`;
 
-  response.redirect('login'); // redirect them to login page
+        pool.query(signupQuery); // save user to databse
+
+        response.redirect('login'); // redirect them to login page
+      }
+    });
 });
 
 // ------------------------------ //
@@ -182,53 +195,71 @@ app.get('/tasks', (request, response) => {
   if (request.isUserLoggedIn) {
     console.log('GET: TASKS');
 
+    const n = !request.query.n ? 0 : Number(request.query.n);
+    // first get task lists with user ID and store as separate key:value pair (use inner join)
+    // then get inner join of all tasks with list names
+    // in EJS: 
+    // display all columns for all lists with inputs
+    // display button to create new lists and add users
+    // if task has list name then show in list
     const { userID } = request.cookies;
-    const getTodoQuery = `SELECT * FROM tasks WHERE user_id=${userID} ORDER BY task_id;`;
-    // now I need to make an inner join thing happen
-    // to display all the different lists that this person has
 
-    pool.query(getTodoQuery)
+    const listQuery = `SELECT list_users.user_id, lists.list_id, lists.list_name 
+      FROM list_users
+      INNER JOIN lists ON list_users.list_id=lists.list_id
+      WHERE list_users.user_id=$1;`
+
+    const output = { n };
+
+    pool.query(listQuery, [userID])
       .then((result) => {
-        const tasks = result.rows;
+        output.lists = result.rows;
+      }).then(() => {
+        // const getTodoQuery = `SELECT * FROM tasks WHERE user_id=${userID} ORDER BY task_id;`;
+        // this query needs to be innerjoined
+        const getTodoQuery = `SELECT tasks.task_id, tasks.user_id, tasks.list_id, tasks.task, tasks.task_date, tasks.task_state, FROM tasks WHERE user_id=${userID} ORDER BY task_id;`;
 
-        // this needs to be moved out of here so that 
-        // I can manipulate it later on to display previous / later dates. 
-        // but it works for now. so happy. 😭
-        const today = DateTime.now();
-        tasks.dates = [
-          {
-            weekday: today.minus({ days: 1 }).toLocaleString(dayFormat),
-            date: today.minus({ days: 1 }).setLocale('en-GB').toLocaleString(dateFormat)
-          },
-          {
-            weekday: today.setLocale('en-GB').toLocaleString(dayFormat),
-            date: today.setLocale('en-GB').toLocaleString(dateFormat)
-          },
-          {
-            weekday: today.plus({ days: 1 }).toLocaleString(dayFormat),
-            date: today.plus({ days: 1 }).setLocale('en-GB').toLocaleString(dateFormat)
-          },
-          {
-            weekday: today.plus({ days: 2 }).toLocaleString(dayFormat),
-            date: today.plus({ days: 2 }).setLocale('en-GB').toLocaleString(dateFormat)
-          },
-          {
-            weekday: today.plus({ days: 3 }).toLocaleString(dayFormat),
-            date: today.plus({ days: 3 }).setLocale('en-GB').toLocaleString(dateFormat)
-          }
-        ];
+        pool.query(getTodoQuery)
+          .then((result) => {
+            const tasks = result.rows;
 
-        response.render('tasks', { tasks });
-      })
+            tasks.dates = [
+              {
+                weekday: today.plus({ days: n - 1 }).toLocaleString(dayFormat),
+                date: today.plus({ days: n - 1 }).setLocale('en-GB').toLocaleString(dateFormat)
+              },
+              {
+                weekday: today.plus({ days: n }).toLocaleString(dayFormat),
+                date: today.plus({ days: n }).setLocale('en-GB').toLocaleString(dateFormat)
+              },
+              {
+                weekday: today.plus({ days: n + 1 }).toLocaleString(dayFormat),
+                date: today.plus({ days: n + 1 }).setLocale('en-GB').toLocaleString(dateFormat)
+              },
+              {
+                weekday: today.plus({ days: n + 2 }).toLocaleString(dayFormat),
+                date: today.plus({ days: n + 2 }).setLocale('en-GB').toLocaleString(dateFormat)
+              },
+              {
+                weekday: today.plus({ days: n + 3 }).toLocaleString(dayFormat),
+                date: today.plus({ days: n + 3 }).setLocale('en-GB').toLocaleString(dateFormat)
+              }
+            ];
+
+            response.render('tasks', { tasks, n });
+          });
+      });
   } else {
     console.log('Not logged in, redirecting to login page.')
     response.status(403).redirect('login');
   }
+
 });
 
 app.post('/tasks/:day/:month/:year', (request, response) => { // creating new task
   console.log('POST: TASKS')
 
+  const n = !request.query.n ? 0 : Number(request.query.n);
   const { month, day, year } = request.params;
   const date = `${day}/${month}/${year}`
   const { userID } = request.cookies;
@@ -240,14 +271,34 @@ app.post('/tasks/:day/:month/:year', (request, response) => { // creating new ta
   pool.query(createTodoQuery)
     .then((result) => {
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
-        response.redirect('/tasks');
+        response.redirect(`/tasks?n=${n}`);
       }, 50);
     })
+});
 
+app.post('/tasks/:list', (request, response) => { // creating new task
+  console.log('POST: TASKS')
+
+  const n = !request.query.n ? 0 : Number(request.query.n);
+  const { list } = request.params;
+  const { userID } = request.cookies;
+  const { todo } = request.body;
+  const createTodoQuery = `INSERT INTO tasks 
+    (user_id, task, task_date, task_state) 
+    VALUES ('${userID}', '${todo}', '${date}', false);`;
+
+  pool.query(createTodoQuery)
+    .then((result) => {
+      setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
+        response.redirect(`/tasks?n=${n}`);
+      }, 50);
+    })
 });
 
 app.put('/tasks/:task_id/complete', (request, response) => { // editing existing task
   console.log('PUT: TASKS');
+
+  const n = !request.query.n ? 0 : Number(request.query.n);
   const { task_id } = request.params;
   const checkCompleteQuery = `SELECT task_state FROM tasks WHERE task_id=${task_id};`;
 
@@ -261,21 +312,42 @@ app.put('/tasks/:task_id/complete', (request, response) => { // editing existing
         pool.query(changeStatusQuery);
       }
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
-        response.redirect('/tasks');
+        response.redirect(`/tasks?n=${n}`);
       }, 50);
     })
 });
 
 app.delete('/tasks/:task_id', (request, response) => { // delete existing task
   console.log('DEL: TASKS')
+
+  const n = !request.query.n ? 0 : Number(request.query.n);
   const { task_id } = request.params;
   const deleteTodoQuery = `DELETE FROM tasks WHERE task_id='${task_id}';`;
 
   pool.query(deleteTodoQuery);
 
   setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly
-    response.redirect('/tasks')
+    response.redirect(`/tasks?n=${n}`);
   }, 50);
+});
+
+// ------------------------------ //
+// route: get / edit lists------- //
+// ------------------------------ //
+app.get('/list/create', (request, response) => {
+
+});
+
+app.post('/list/create', (request, response) => {
+
+});
+
+app.get('/list/edit', (request, response) => {
+
+});
+
+app.put('/list/edit', (request, response) => {
+
 });
 
 // ------------------------------ //
