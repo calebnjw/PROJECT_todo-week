@@ -144,8 +144,6 @@ app.post('/login', (request, response) => {
   const { username, password } = request.body; // contents of login form
   const loginQuery = `SELECT user_id, password FROM users WHERE username='${username}';`;
 
-  console.log('QUERYING');
-
   // look up data from users
   pool.query(loginQuery)
     .then((result) => {
@@ -195,58 +193,79 @@ app.get('/tasks', (request, response) => {
   if (request.isUserLoggedIn) {
     console.log('GET: TASKS');
 
-    const n = !request.query.n ? 0 : Number(request.query.n);
     // first get task lists with user ID and store as separate key:value pair (use inner join)
     // then get inner join of all tasks with list names
     // in EJS: 
     // display all columns for all lists with inputs
     // display button to create new lists and add users
     // if task has list name then show in list
-    const { userID } = request.cookies;
 
+    // these values are used to 'scroll' between dates / lists
+    const n = !request.query.n ? 0 : Number(request.query.n); // for dates
+    const m = !request.query.m ? 0 : Number(request.query.m); // for lists
+
+    const { userID } = request.cookies;
     const listQuery = `SELECT list_users.user_id, lists.list_id, lists.list_name 
       FROM list_users
-      INNER JOIN lists ON list_users.list_id=lists.list_id
+      INNER JOIN lists
+      ON list_users.list_id=lists.list_id
       WHERE list_users.user_id=$1;`
 
-    const output = { n };
+    // output variable to store data from all queries
+    // this output is sent to response.render after all queries are done
+    const output = { n, m };
 
-    pool.query(listQuery, [userID])
+    pool.query(listQuery, [userID]) // query to get list of lists
       .then((result) => {
         output.lists = result.rows;
       }).then(() => {
-        // const getTodoQuery = `SELECT * FROM tasks WHERE user_id=${userID} ORDER BY task_id;`;
-        // this query needs to be innerjoined
-        const getTodoQuery = `SELECT tasks.task_id, tasks.user_id, tasks.list_id, tasks.task, tasks.task_date, tasks.task_state, FROM tasks WHERE user_id=${userID} ORDER BY task_id;`;
+        // this query only gets results with a list_id attached
+        const getListTodoQuery = `SELECT tasks.task_id, tasks.user_id, tasks.task, tasks.task_date, tasks.task_state, 
+          lists.list_id, lists.list_name
+          FROM tasks
+          INNER JOIN lists
+          ON tasks.list_id=lists.list_id
+          WHERE user_id=$1
+          ORDER BY task_id;`;
 
-        pool.query(getTodoQuery)
+        pool.query(getListTodoQuery, [userID]) // query to get list of tasks that are attached to lists
           .then((result) => {
-            const tasks = result.rows;
+            output.lists_tasks = result.rows;
+          }).then(() => {
+            // this query only gets results where there is no list_id
+            const getDateTodoQuery = `SELECT * FROM tasks
+              WHERE user_id=$1 AND list_id IS NULL
+              ORDER BY task_id;`;
 
-            tasks.dates = [
-              {
-                weekday: today.plus({ days: n - 1 }).toLocaleString(dayFormat),
-                date: today.plus({ days: n - 1 }).setLocale('en-GB').toLocaleString(dateFormat)
-              },
-              {
-                weekday: today.plus({ days: n }).toLocaleString(dayFormat),
-                date: today.plus({ days: n }).setLocale('en-GB').toLocaleString(dateFormat)
-              },
-              {
-                weekday: today.plus({ days: n + 1 }).toLocaleString(dayFormat),
-                date: today.plus({ days: n + 1 }).setLocale('en-GB').toLocaleString(dateFormat)
-              },
-              {
-                weekday: today.plus({ days: n + 2 }).toLocaleString(dayFormat),
-                date: today.plus({ days: n + 2 }).setLocale('en-GB').toLocaleString(dateFormat)
-              },
-              {
-                weekday: today.plus({ days: n + 3 }).toLocaleString(dayFormat),
-                date: today.plus({ days: n + 3 }).setLocale('en-GB').toLocaleString(dateFormat)
-              }
-            ];
+            pool.query(getDateTodoQuery, [userID]) // query to get list of tasks that are attached to dates
+              .then((result) => {
+                output.dates_tasks = result.rows;
+                output.dates = [ // create the variable dates
+                  {
+                    weekday: today.plus({ days: n - 1 }).toLocaleString(dayFormat),
+                    date: today.plus({ days: n - 1 }).setLocale('en-GB').toLocaleString(dateFormat)
+                  },
+                  {
+                    weekday: today.plus({ days: n }).toLocaleString(dayFormat),
+                    date: today.plus({ days: n }).setLocale('en-GB').toLocaleString(dateFormat)
+                  },
+                  {
+                    weekday: today.plus({ days: n + 1 }).toLocaleString(dayFormat),
+                    date: today.plus({ days: n + 1 }).setLocale('en-GB').toLocaleString(dateFormat)
+                  },
+                  {
+                    weekday: today.plus({ days: n + 2 }).toLocaleString(dayFormat),
+                    date: today.plus({ days: n + 2 }).setLocale('en-GB').toLocaleString(dateFormat)
+                  },
+                  {
+                    weekday: today.plus({ days: n + 3 }).toLocaleString(dayFormat),
+                    date: today.plus({ days: n + 3 }).setLocale('en-GB').toLocaleString(dateFormat)
+                  }
+                ];
 
-            response.render('tasks', { tasks, n });
+                console.log('output', output);
+                response.render('tasks', output);
+              });
           });
       });
   } else {
