@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Todo - Edit</title>
+
+    <%- include('partials/styles.ejs') %>
+  </head>
+  <body>
+    <%- include('partials/navbar-logout.ejs') %>
+
+    <div class="container-sm">
+      <div class="row">
+        <div class="col-md-3 col-lg-6">
+          <h1>Edit List</h1>
+          <form action="/list/delete/<%= list_id %>?_method=DELETE" method="POST">
+            <input
+              type="button"
+              class="btn btn-secondary w-25 mb-2"
+              onclick="window.location.href='/tasks'"
+              value="Back"
+            />
+            <input type="submit" class="btn btn-danger w-25 mb-2" value="Delete" />
+          </form>
+        </div>
+        <div class="col-md-9 col-lg-6">
+          <form action="/list/rename/<%= list_id %>?_method=PUT" method="POST">
+            <div class="input-group mb-3">
+              <div class="input-group-prepend w-25">
+                <span class="input-group-text w-100" id="basic-addon3">List Name</span>
+              </div>
+              <input
+                class="form-control"
+                type="text"
+                id="list_name"
+                name="list_name"
+                value="<%= list_name %>"
+              />
+            </div>
+            <div class="mb-3">
+              <input type="submit" class="btn btn-primary w-25 mb-2" value="Update" />
+            </div>
+          </form>
+          <p>Collaborators:</p>
+          <form class="input-group" action="/list/add/<%= list_id %>?_method=PUT" method="POST">
+            <div class="input-group-prepend w-25">
+              <span class="input-group-text w-100" id="basic-addon3">Username</span>
+            </div>
+            <input
+              class="form-control"
+              type="text"
+              id="username"
+              name="username"
+              placeholder="Enter usernames here"
+            />
+            <div class="input-group-append w-25">
+              <button type="submit" class="btn btn-outline-info w-100">➕</button>
+            </div>
+          </form>
+          <% if (usernames.length > 1) { %>
+          <ul class="list-group">
+            <!-- go through the list of users -->
+            <% usernames.forEach((user) => { %>
+            <!-- only display users who are not the current user -->
+            <% if (user.user_id !== Number(currentUser)) { %>
+            <li class="list-group-item">
+              <span class="btn-group">
+                <form
+                  class=""
+                  action="/list/delete/<%= list_id %>/<%= user.user_id %>/?_method=DELETE"
+                  method="POST"
+                >
+                  <input class="mr-3" type="submit" value="❌" />
+                </form>
+              </span>
+              <%= user.username %>
+            </li>
+            <!-- close 'user match' if statement -->
+            <% } %>
+            <!-- close array iteration -->
+            <% }) %>
+          </ul>
+          <!-- close usernames length check -->
+          <% } %>
+        </div>
+      </div>
+    </div>
+
+    <%- include('partials/scripts.ejs') %>
+  </body>
+</html>

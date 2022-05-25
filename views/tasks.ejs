@@ -4,23 +4,39 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Todo - Tasks</title>
 
     <%- include('partials/styles.ejs') %>
   </head>
   <body>
     <script>
-      let n = Number("<%= n %>");
-      let m = Number("<%= m %>");
+      let n = Number("<%= n %>"); // to move dates
+      let m = Number("<%= m %>"); // to move alt lists
+
+      const minusN = () => {
+        n = n - 1;
+        window.location.href = `/tasks?n=${n}&m=${m}`;
+      };
 
       const plusN = () => {
         n = n + 1;
         window.location.href = `/tasks?n=${n}&m=${m}`;
       };
 
-      const minusN = () => {
-        n = n - 1;
-        window.location.href = `/tasks?n=${n}&m=${m}`;
+      const minusM = (listLen) => {
+        if (listLen >= 5 && m > 0) {
+          m = m - 1;
+          window.location.href = `/tasks?n=${n}&m=${m}`;
+        }
+      };
+
+      const plusM = (listLen) => {
+        // don't +1 if m is more than list length - 5
+        // because we are displaying 5 lists at a time
+        if (listLen >= 5 && m < listLen - 5) {
+          m = m + 1;
+          window.location.href = `/tasks?n=${n}&m=${m}`;
+        }
       };
     </script>
     <%- include('partials/navbar-logout.ejs') %>
@@ -39,12 +55,14 @@
           <!-- create divs for each date -->
           <% dates.forEach((date) => { %>
           <div class="col-2">
-            <h4><%= date.weekday %></h4>
-            <p><%= date.date %></p>
+            <div class="mb-3 h-25">
+              <h4 class="mb-0"><%= date.weekday %></h4>
+              <p><%= date.date %></p>
+            </div>
             <div class="row">
               <!-- if there are tasks to be displayed and don't belong in a list -->
               <% if (dates_tasks.length !== 0) { %>
-              <ul class="list-group">
+              <ul class="list-group w-100">
                 <!-- iterate through each task in the array -->
                 <% dates_tasks.forEach((task) => { %>
                 <!-- check that the date on the task matches the current date on the list -->
@@ -72,7 +90,7 @@
                 </li>
                 <% } else { %>
                 <!-- if not, render this list style: -->
-                <li class="list-group-item justify-content-between">
+                <li class="list-group-item">
                   <span class="btn-group">
                     <form
                       class=""
@@ -100,7 +118,7 @@
               </ul>
               <!-- close 'list checking' if else -->
               <% } %>
-              <form class="" action="/tasks/<%= date.date %>?n=<%= n %>" method="POST">
+              <form class="w-100" action="/tasks/<%= date.date %>?n=<%= n %>" method="POST">
                 <input
                   class="list-group-item form-control py-4"
                   type="text"
@@ -131,27 +149,40 @@
         <div class="row">
           <!-- div for left button -->
           <div class="text-center col-1">
-            <button class="btn btn-outline-primary mr-3" type="button" onclick="minusN()">
+            <button
+              class="btn btn-outline-primary mr-3"
+              type="button"
+              onclick="minusM(<%= lists.length %>)"
+            >
               ⬅️
             </button>
           </div>
-          <!-- create divs for each date -->
-          <% lists.forEach((list) => { %>
+          <!-- create variable o to be changed according to number of sub lists -->
+          <% let o = 5; %>
+          <!-- if there are less than 5 lists -->
+          <% if (lists.length < 5) { %>
+          <!-- o should be the number of lists -->
+          <% o = lists.length; %> <% } %>
+          <!-- iterate through m + o number of columns -->
+          <!-- this relies on the fact that after we delete any list -->
+          <!-- we reset m to 0 when we load /tasks -->
+          <% for (let i = m; i < m + o; i += 1) { %>
+          <!-- create divs for each list name -->
           <div class="col-2">
-            <span class="btn-group">
-              <form class="" action="/list/edit/<%= list.list_id %>" method="POST">
+            <span class="btn-group mb-3 h-25">
+              <form class="" action="/list/edit/<%= lists[i].list_id %>" method="GET">
                 <input class="mr-2" type="submit" value="✏️" />
               </form>
-              <h4><%= list.list_name %></h4>
+              <h5><%= lists[i].list_name %></h5>
             </span>
             <div class="row">
               <!-- if there are tasks to be displayed and don't belong in a list -->
               <% if (lists_tasks.length !== 0) { %>
-              <ul class="list-group">
+              <ul class="list-group w-100">
                 <!-- iterate through each task in the array -->
                 <% lists_tasks.forEach((task) => { %>
-                <!-- check that the date on the task matches the current date on the list -->
-                <% if (task.list_id === list.list_id) { %>
+                <!-- check that the list_id on the task matches the current list_id -->
+                <% if (task.list_id === lists[i].list_id) { %>
                 <!-- if tasks is completed, render this list style: -->
                 <% if (task.task_state === true) { %>
                 <li class="list-group-item task-complete">
@@ -175,7 +206,7 @@
                 </li>
                 <% } else { %>
                 <!-- if not, render this list style: -->
-                <li class="list-group-item justify-content-between">
+                <li class="list-group-item">
                   <span class="btn-group">
                     <form
                       class=""
@@ -196,14 +227,14 @@
                 </li>
                 <!-- close 'completed state' if else -->
                 <% } %>
-                <!-- close 'date comparison' if else -->
+                <!-- close 'list_id comparison' if else -->
                 <% } %>
                 <!-- close 'tasks iteration' forEach -->
                 <% }) %>
               </ul>
               <!-- close 'list checking' if else -->
               <% } %>
-              <form class="" action="/tasks/<%= list.list_id %>?n=<%= n %>" method="POST">
+              <form class="w-100" action="/tasks/<%= lists[i].list_id %>?n=<%= n %>" method="POST">
                 <input
                   class="list-group-item form-control py-4"
                   type="text"
@@ -216,14 +247,22 @@
             </div>
             <!-- close col -->
           </div>
-          <% }) %>
+
+          <% } %>
           <!-- div for right button -->
           <div class="text-center col-1 mb-3">
-            <button class="btn btn-outline-primary mb-1" type="button" onclick="plusN()">➡️</button>
+            <button
+              class="btn btn-outline-primary mb-1"
+              type="button"
+              onclick="plusM(<%= lists.length %>)"
+            >
+              ➡️
+            </button>
+            <br />
             <button
               class="btn btn-outline-primary"
               type="button"
-              onclick="window.location.href='/lists/create'"
+              onclick="window.location.href='/list/create'"
             >
               ➕
             </button>

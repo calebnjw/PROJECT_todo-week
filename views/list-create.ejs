@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Todo - Create</title>
+
+    <%- include('partials/styles.ejs') %>
+  </head>
+  <body>
+    <%- include('partials/navbar-logout.ejs') %>
+
+    <div class="container-sm">
+      <div class="row">
+        <div class="col-md-3 col-lg-6">
+          <h1>Create List</h1>
+          <input
+            type="button"
+            class="btn btn-secondary w-25 mb-2"
+            onclick="window.location.href='/tasks'"
+            value="Back"
+          />
+        </div>
+        <div class="col-md-9 col-lg-6">
+          <form action="/list/create" method="POST">
+            <div class="input-group mb-3">
+              <div class="input-group-prepend w-25">
+                <span class="input-group-text w-100" id="basic-addon3">List Name</span>
+              </div>
+              <input
+                class="form-control"
+                type="text"
+                id="list_name"
+                name="list_name"
+                placeholder="First Name"
+              />
+            </div>
+
+            <div class="mt-5">
+              <input type="submit" class="btn btn-primary w-25 mb-2" value="Create" />
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <%- include('partials/scripts.ejs') %>
+  </body>
+</html>

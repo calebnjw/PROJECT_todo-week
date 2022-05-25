@@ -46,6 +46,7 @@ import jsSHA from 'jssha';
 
 /* postgres */
 import pg from 'pg';
+import e from 'express';
 
 /* create express app */
 const app = express();
@@ -97,13 +98,14 @@ const getHashed = (input) => {
 // ------------------------------ //
 app.get('/', (request, response) => {
   response.redirect('/tasks');
-})
+});
 
 // ------------------------------ //
 // route: signup----------------- //
 // ------------------------------ //
 app.get('/signup', (request, response) => {
   console.log('GET: SIGNUP');
+
   response.render('signup');
 });
 
@@ -111,23 +113,29 @@ app.post('/signup', (request, response) => {
   console.log('POST: SIGNUP');
 
   const { first_name, last_name, username, password } = request.body; // contents of signup form
-  const existingUserQuery = `SELECT user_id FROM users WHERE username = '${username}';`
+  const existingUserQuery = `SELECT user_id FROM users WHERE username = $1;`
 
-  pool.query(existingUserQuery)
+  pool.query(existingUserQuery, [username])
     .then((result) => {
       if (result.rows.length !== 0) {
+        console.log('Username is in use.');
         response.status(403).send('Username is in use.');
       } else {
         const hashedPassword = getHashed(password); // hashing password entered
         const signupQuery = `INSERT INTO users 
           (first_name, last_name, username, password)
-          VALUES ('${first_name}', '${last_name}', '${username}', '${hashedPassword}');`;
+          VALUES ($1, $2, $3, $4);`;
 
-        pool.query(signupQuery); // save user to databse
+        pool.query(signupQuery, [first_name, last_name, username, hashedPassword]); // save user to databse
 
+        console.log('Singup success.');
         response.redirect('login'); // redirect them to login page
-      }
-    });
+      };
+    })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
 });
 
 // ------------------------------ //
@@ -135,6 +143,7 @@ app.post('/signup', (request, response) => {
 // ------------------------------ //
 app.get('/login', (request, response) => {
   console.log('GET: LOGIN');
+
   response.render('login');
 });
 
@@ -142,16 +151,16 @@ app.post('/login', (request, response) => {
   console.log('POST: LOGIN');
 
   const { username, password } = request.body; // contents of login form
-  const loginQuery = `SELECT user_id, password FROM users WHERE username='${username}';`;
+  const loginQuery = `SELECT user_id, password FROM users WHERE username=$1;`;
 
   // look up data from users
-  pool.query(loginQuery)
+  pool.query(loginQuery, [username])
     .then((result) => {
       if (result.rows.length === 0) { // no matching username
         console.log('Wrong username or password. Try again.');
         response.status(403).send('Wrong username or password. Try again.');
         return;
-      }
+      };
 
       const enteredPassword = getHashed(password); // hash what the user has keyed in
       const { user_id, password: savedPassword } = result.rows[0] // get the hash from matching username
@@ -165,7 +174,7 @@ app.post('/login', (request, response) => {
         response.cookie('loggedIn', true); // set a cookie with login status
         response.cookie('userID', user_id); // set a cookie with login status
         response.redirect('/tasks'); // redirect them to todo list
-      }
+      };
     })
     .catch((error) => {
       console.log(error);
@@ -181,7 +190,7 @@ app.use((request, response, next) => {
 
   if (request.cookies.loggedIn && request.cookies.userID) {
     request.isUserLoggedIn = true;
-  }
+  };
 
   next();
 });
@@ -205,11 +214,13 @@ app.get('/tasks', (request, response) => {
     const m = !request.query.m ? 0 : Number(request.query.m); // for lists
 
     const { userID } = request.cookies;
+
     const listQuery = `SELECT list_users.user_id, lists.list_id, lists.list_name 
       FROM list_users
       INNER JOIN lists
       ON list_users.list_id=lists.list_id
-      WHERE list_users.user_id=$1;`
+      WHERE list_users.user_id=$1
+      ORDER BY lists.list_id;`;
 
     // output variable to store data from all queries
     // this output is sent to response.render after all queries are done
@@ -219,16 +230,13 @@ app.get('/tasks', (request, response) => {
       .then((result) => {
         output.lists = result.rows;
       }).then(() => {
-        // this query only gets results with a list_id attached
-        const getListTodoQuery = `SELECT tasks.task_id, tasks.user_id, tasks.task, tasks.task_date, tasks.task_state, 
-          lists.list_id, lists.list_name
+        // this query only gets results with a list_id attached (regardless of user_id)
+        const getListTodoQuery = `SELECT * 
           FROM tasks
-          INNER JOIN lists
-          ON tasks.list_id=lists.list_id
-          WHERE user_id=$1
+          WHERE list_id IS NOT NULL
           ORDER BY task_id;`;
 
-        pool.query(getListTodoQuery, [userID]) // query to get list of tasks that are attached to lists
+        pool.query(getListTodoQuery) // query to get list of tasks that are attached to lists
           .then((result) => {
             output.lists_tasks = result.rows;
           }).then(() => {
@@ -263,87 +271,132 @@ app.get('/tasks', (request, response) => {
                   }
                 ];
 
-                console.log('output', output);
                 response.render('tasks', output);
-              });
-          });
-      });
+
+              })
+              .catch((error => {
+                console.log(error);
+                response.send(error);
+              }));
+
+          })
+          .catch((error => {
+            console.log(error);
+            response.send(error);
+          }));
+
+      })
+      .catch((error => {
+        console.log(error);
+        response.send(error);
+      }));
+
   } else {
     console.log('Not logged in, redirecting to login page.')
     response.status(403).redirect('login');
-  }
-
+  };
 });
 
 app.post('/tasks/:day/:month/:year', (request, response) => { // creating new task
-  console.log('POST: TASKS')
+  console.log('POST: TASKS');
 
   const n = !request.query.n ? 0 : Number(request.query.n);
+
   const { month, day, year } = request.params;
-  const date = `${day}/${month}/${year}`
+  const date = `${day}/${month}/${year}`;
   const { userID } = request.cookies;
   const { todo } = request.body;
+
   const createTodoQuery = `INSERT INTO tasks 
     (user_id, task, task_date, task_state) 
-    VALUES ('${userID}', '${todo}', '${date}', false);`;
+    VALUES ($1, $2, $3, false);`;
 
-  pool.query(createTodoQuery)
+  pool.query(createTodoQuery, [userID, todo, date])
     .then((result) => {
+      console.log('Task added to', date);
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
         response.redirect(`/tasks?n=${n}`);
       }, 50);
     })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
 });
 
-app.post('/tasks/:list', (request, response) => { // creating new task
-  console.log('POST: TASKS')
+app.post('/tasks/:list_id', (request, response) => { // creating new task
+  console.log('POST: TASKS');
 
   const n = !request.query.n ? 0 : Number(request.query.n);
-  const { list } = request.params;
+
+  const { list_id } = request.params;
   const { userID } = request.cookies;
   const { todo } = request.body;
-  const createTodoQuery = `INSERT INTO tasks 
-    (user_id, task, task_date, task_state) 
-    VALUES ('${userID}', '${todo}', '${date}', false);`;
 
-  pool.query(createTodoQuery)
+  const createTodoQuery = `INSERT INTO tasks 
+    (user_id, list_id, task, task_state) 
+    VALUES ($1, $2, $3, false);`;
+
+  pool.query(createTodoQuery, [userID, list_id, todo])
     .then((result) => {
+      console.log('QUERY SUCCESS');
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
         response.redirect(`/tasks?n=${n}`);
       }, 50);
     })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
 });
 
 app.put('/tasks/:task_id/complete', (request, response) => { // editing existing task
   console.log('PUT: TASKS');
 
   const n = !request.query.n ? 0 : Number(request.query.n);
-  const { task_id } = request.params;
-  const checkCompleteQuery = `SELECT task_state FROM tasks WHERE task_id=${task_id};`;
 
-  pool.query(checkCompleteQuery)
+  const { task_id } = request.params;
+
+  const checkCompleteQuery = `SELECT task_state FROM tasks WHERE task_id=$1;`;
+
+  pool.query(checkCompleteQuery, [task_id])
     .then((result) => {
-      let changeStatusQuery = `UPDATE tasks SET task_state=true WHERE task_id=${task_id};`;
+      let changeStatusQuery = `UPDATE tasks SET task_state=true WHERE task_id=$1;`;
       if (result.rows[0].task_state === false) {
-        pool.query(changeStatusQuery);
+        console.log('Task marked as complete.');
+        pool.query(changeStatusQuery, [task_id]);
       } else {
-        changeStatusQuery = `UPDATE tasks SET task_state=false WHERE task_id=${task_id};`;
-        pool.query(changeStatusQuery);
+        changeStatusQuery = `UPDATE tasks SET task_state=false WHERE task_id=$1;`;
+        console.log('Task marked as incomplete.');
+        pool.query(changeStatusQuery, [task_id]);
       }
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
         response.redirect(`/tasks?n=${n}`);
       }, 50);
     })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
 });
 
 app.delete('/tasks/:task_id', (request, response) => { // delete existing task
-  console.log('DEL: TASKS')
+  console.log('DEL: TASKS');
 
   const n = !request.query.n ? 0 : Number(request.query.n);
-  const { task_id } = request.params;
-  const deleteTodoQuery = `DELETE FROM tasks WHERE task_id='${task_id}';`;
 
-  pool.query(deleteTodoQuery);
+  const { task_id } = request.params;
+
+  const deleteTodoQuery = `DELETE FROM tasks WHERE task_id=$1;`;
+
+  pool.query(deleteTodoQuery, [task_id])
+    .then(() => {
+      console.log('Task deleted:', task_id);
+    })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
 
   setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly
     response.redirect(`/tasks?n=${n}`);
@@ -351,22 +404,211 @@ app.delete('/tasks/:task_id', (request, response) => { // delete existing task
 });
 
 // ------------------------------ //
-// route: get / edit lists------- //
+// route: create / edit lists---- //
 // ------------------------------ //
+// get create list
 app.get('/list/create', (request, response) => {
+  console.log('GET: LIST CREATE');
 
+  response.render('list-create');
 });
 
 app.post('/list/create', (request, response) => {
+  console.log('POST: LIST CREATE');
+
+  // create list
+  // get list id
+  // make association in list_users
+
+  const { list_name } = request.body;
+  const user_id = Number(request.cookies.userID);
+
+  const createListQuery = `INSERT INTO lists (list_name) 
+    VALUES ($1)
+    RETURNING list_id;`;
+
+  pool.query(createListQuery, [list_name])
+    .then((result) => {
+      console.log('List created.');
+      const { list_id } = result.rows[0]
+      const addUserQuery = `INSERT INTO list_users (user_id, list_id)
+        VALUES ($1, $2);`;
+
+      pool.query(addUserQuery, [user_id, list_id])
+        .then(() => {
+          console.log('Added user to list.');
+          response.redirect(`/list/edit/${list_id}`);
+        });
+    })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
 
 });
 
-app.get('/list/edit', (request, response) => {
+// get edit list
+app.get('/list/edit/:list_id', (request, response) => {
+  console.log('GET: LIST EDIT');
 
+  const currentUser = Number(request.cookies.userID);
+  const { list_id } = request.params;
+
+  const output = { currentUser, list_id };
+  const listQuery = `SELECT list_name 
+    FROM lists
+    WHERE lists.list_id=$1;`;
+
+  // get list name using list_id
+  // then get list of users + user_id
+  // in ejs: 
+  // render a form that will lead to 
+  // should render each user in the list as a list group 
+  // with delete user button
+
+  pool.query(listQuery, [list_id])
+    .then((result) => {
+      output.list_name = result.rows[0].list_name;
+    })
+    .then(() => {
+      const userQuery = `SELECT users.user_id, users.username
+      FROM users
+      INNER JOIN list_users
+      ON list_users.user_id = users.user_id
+      WHERE list_users.list_id=$1;`;
+
+      pool.query(userQuery, [list_id])
+        .then((result) => {
+          output.usernames = [];
+          result.rows.forEach(({ user_id, username }) => {
+            output.usernames.push({ user_id, username });
+          });
+
+          response.render('list-edit', output);
+        })
+        .catch((error => {
+          console.log(error);
+          response.send(error);
+        }));
+    })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
 });
 
-app.put('/list/edit', (request, response) => {
+// to change list name
+app.put('/list/rename/:list_id', (request, response) => {
+  console.log('POST: LIST EDIT');
 
+  const { list_id } = request.params;
+  const { list_name } = request.body;
+
+  // update value of list_name at list_id
+  // UPDATE [table] SET[column] = [value] WHERE[column] = [value];
+  const updateNameQuery = `UPDATE lists 
+    SET list_name=$1 
+    WHERE list_id=$2;`;
+
+  pool.query(updateNameQuery, [list_name, list_id])
+    .then(() => {
+      console.log('List renamed!');
+      response.redirect('/tasks');
+    })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
+});
+
+// to add users
+app.put('/list/add/:list_id/', (request, response) => {
+  console.log('POST: LIST EDIT - ADD USER')
+
+  const currentUser = Number(request.cookies.userID);
+  const { list_id } = request.params;
+  const { username } = request.body;
+  // to add users: 
+  // look for username entered,
+  // if it exists, get user_id
+  // create association in list_users
+  // if not, say user does not exist
+
+  const userQuery = `SELECT user_id FROM users WHERE username=$1;`
+  pool.query(userQuery, [username])
+    .then((result) => {
+      console.log(result.rows);
+      if (result.rows.length === 0) {
+        console.log('No user found');
+        response.status(403).send('No user with that username found.');
+      }
+
+      const { user_id } = result.rows[0];
+      if (user_id === currentUser) {
+        console.log(`You're already in the list!`);
+        response.status(403).send(`You're already in the list!`);
+      } else {
+        const addUserQuery = `INSERT INTO list_users (user_id, list_id)
+          VALUES ($1, $2);`;
+
+        pool.query(addUserQuery, [user_id, list_id])
+          .then(() => {
+            console.log('Added user to list.');
+            response.redirect(`/list/edit/${list_id}`);
+          })
+          .catch((error => {
+            console.log(error);
+            response.send(error);
+          }));
+      }
+    })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
+});
+
+// to delete users (sub form)
+app.delete('/list/delete/:list_id/:user_id', (request, response) => {
+  console.log('POST: LIST EDIT - ADD USER')
+
+  const { list_id, user_id } = request.params;
+
+  // delete user_id from list_user where list_id = list_id
+  const deleteUserQuery = `DELETE FROM list_users
+    WHERE list_id=$1
+    AND user_id=$2;`;
+
+  pool.query(deleteUserQuery, [list_id, user_id])
+    .then(() => {
+      console.log('Removed user:', user_id);
+      response.redirect(`/list/edit/${list_id}`);
+    })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }));
+});
+
+app.delete('/list/delete/:list_id', (request, response) => {
+  console.log('DELETE: LIST')
+
+  const { list_id } = request.params;
+  // delete list_id from lists
+  // delete list_id from list_users
+
+  const deleteQuery = `
+    DELETE FROM lists WHERE list_id='${list_id}';
+    DELETE FROM list_users WHERE list_id='${list_id}';`
+
+  pool.query(deleteQuery)
+    .then(() => {
+      response.redirect('/tasks');
+    })
+    .catch((error => {
+      console.log(error);
+      response.send(error);
+    }))
 });
 
 // ------------------------------ //
