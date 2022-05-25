@@ -151,7 +151,7 @@ app.post('/login', (request, response) => {
   console.log('POST: LOGIN');
 
   const { username, password } = request.body; // contents of login form
-  const loginQuery = `SELECT user_id, password FROM users WHERE username=$1;`;
+  const loginQuery = `SELECT first_name, user_id, password FROM users WHERE username=$1;`;
 
   // look up data from users
   pool.query(loginQuery, [username])
@@ -163,7 +163,7 @@ app.post('/login', (request, response) => {
       };
 
       const enteredPassword = getHashed(password); // hash what the user has keyed in
-      const { user_id, password: savedPassword } = result.rows[0] // get the hash from matching username
+      const { first_name, user_id, password: savedPassword } = result.rows[0] // get the hash from matching username
 
       if (enteredPassword !== savedPassword) { // hashed passwords don't match
         console.log('Wrong username or password. Try again.');
@@ -173,6 +173,7 @@ app.post('/login', (request, response) => {
         console.log('Successfully logged in.');
         response.cookie('loggedIn', true); // set a cookie with login status
         response.cookie('userID', user_id); // set a cookie with login status
+        response.cookie('userName', first_name); // set a cookie with login status
         response.redirect('/tasks'); // redirect them to todo list
       };
     })
@@ -213,7 +214,7 @@ app.get('/tasks', (request, response) => {
     const n = !request.query.n ? 0 : Number(request.query.n); // for dates
     const m = !request.query.m ? 0 : Number(request.query.m); // for lists
 
-    const { userID } = request.cookies;
+    const { userID, userName } = request.cookies;
 
     const listQuery = `SELECT list_users.user_id, lists.list_id, lists.list_name 
       FROM list_users
@@ -224,7 +225,7 @@ app.get('/tasks', (request, response) => {
 
     // output variable to store data from all queries
     // this output is sent to response.render after all queries are done
-    const output = { n, m };
+    const output = { n, m, userName };
 
     pool.query(listQuery, [userID]) // query to get list of lists
       .then((result) => {
@@ -300,7 +301,8 @@ app.get('/tasks', (request, response) => {
 app.post('/tasks/:day/:month/:year', (request, response) => { // creating new task
   console.log('POST: TASKS');
 
-  const n = !request.query.n ? 0 : Number(request.query.n);
+  const n = !request.query.n ? 0 : Number(request.query.n); // for dates
+  const m = !request.query.m ? 0 : Number(request.query.m); // for lists
 
   const { month, day, year } = request.params;
   const date = `${day}/${month}/${year}`;
@@ -315,7 +317,7 @@ app.post('/tasks/:day/:month/:year', (request, response) => { // creating new ta
     .then((result) => {
       console.log('Task added to', date);
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
-        response.redirect(`/tasks?n=${n}`);
+        response.redirect(`/tasks?n=${n}&m=${m}`);
       }, 50);
     })
     .catch((error => {
@@ -327,7 +329,8 @@ app.post('/tasks/:day/:month/:year', (request, response) => { // creating new ta
 app.post('/tasks/:list_id', (request, response) => { // creating new task
   console.log('POST: TASKS');
 
-  const n = !request.query.n ? 0 : Number(request.query.n);
+  const n = !request.query.n ? 0 : Number(request.query.n); // for dates
+  const m = !request.query.m ? 0 : Number(request.query.m); // for lists
 
   const { list_id } = request.params;
   const { userID } = request.cookies;
@@ -341,7 +344,7 @@ app.post('/tasks/:list_id', (request, response) => { // creating new task
     .then((result) => {
       console.log('QUERY SUCCESS');
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
-        response.redirect(`/tasks?n=${n}`);
+        response.redirect(`/tasks?n=${n}&m=${m}`);
       }, 50);
     })
     .catch((error => {
@@ -353,7 +356,8 @@ app.post('/tasks/:list_id', (request, response) => { // creating new task
 app.put('/tasks/:task_id/complete', (request, response) => { // editing existing task
   console.log('PUT: TASKS');
 
-  const n = !request.query.n ? 0 : Number(request.query.n);
+  const n = !request.query.n ? 0 : Number(request.query.n); // for dates
+  const m = !request.query.m ? 0 : Number(request.query.m); // for lists
 
   const { task_id } = request.params;
 
@@ -371,7 +375,7 @@ app.put('/tasks/:task_id/complete', (request, response) => { // editing existing
         pool.query(changeStatusQuery, [task_id]);
       }
       setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly.
-        response.redirect(`/tasks?n=${n}`);
+        response.redirect(`/tasks?n=${n}&m=${m}`);
       }, 50);
     })
     .catch((error => {
@@ -383,7 +387,8 @@ app.put('/tasks/:task_id/complete', (request, response) => { // editing existing
 app.delete('/tasks/:task_id', (request, response) => { // delete existing task
   console.log('DEL: TASKS');
 
-  const n = !request.query.n ? 0 : Number(request.query.n);
+  const n = !request.query.n ? 0 : Number(request.query.n); // for dates
+  const m = !request.query.m ? 0 : Number(request.query.m); // for lists
 
   const { task_id } = request.params;
 
@@ -399,7 +404,7 @@ app.delete('/tasks/:task_id', (request, response) => { // delete existing task
     }));
 
   setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly
-    response.redirect(`/tasks?n=${n}`);
+    response.redirect(`/tasks?n=${n}&m=${m}`);
   }, 50);
 });
 

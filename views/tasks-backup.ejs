@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Todo - Tasks</title>
+
+    <%- include('partials/styles.ejs') %>
+  </head>
+  <body>
+    <script>
+      let n = Number("<%= n %>"); // to move dates
+      let m = Number("<%= m %>"); // to move alt lists
+
+      const minusN = () => {
+        n = n - 1;
+        window.location.href = `/tasks?n=${n}&m=${m}`;
+      };
+
+      const plusN = () => {
+        n = n + 1;
+        window.location.href = `/tasks?n=${n}&m=${m}`;
+      };
+
+      const minusM = (listLen) => {
+        if (listLen >= 5 && m > 0) {
+          m = m - 1;
+          window.location.href = `/tasks?n=${n}&m=${m}`;
+        }
+      };
+
+      const plusM = (listLen) => {
+        // don't +1 if m is more than list length - 5
+        // because we are displaying 5 lists at a time
+        if (listLen >= 5 && m < listLen - 5) {
+          m = m + 1;
+          window.location.href = `/tasks?n=${n}&m=${m}`;
+        }
+      };
+    </script>
+    <%- include('partials/navbar-logout.ejs') %>
+
+    <!-- big container to store whole page -->
+    <div class="container-flex vh-100">
+      <!-- THIS CONTAINER IS FOR THE DATES -->
+      <div class="container-flex mb-5">
+        <div class="row">
+          <!-- div for left button -->
+          <div class="text-center col-1">
+            <button class="btn btn-outline-primary mr-3" type="button" onclick="minusN()">
+              ⬅️
+            </button>
+          </div>
+          <!-- create divs for each date -->
+          <% dates.forEach((date) => { %>
+          <div class="col-2">
+            <div class="">
+              <h4 class="mb-0"><%= date.weekday %></h4>
+              <p><%= date.date %></p>
+            </div>
+            <div class="row">
+              <!-- if there are tasks to be displayed and don't belong in a list -->
+              <% if (dates_tasks.length !== 0) { %>
+              <ul class="list-group w-100">
+                <!-- iterate through each task in the array -->
+                <% dates_tasks.forEach((task) => { %>
+                <!-- check that the date on the task matches the current date on the list -->
+                <% if (task.task_date === date.date) { %>
+                <!-- if tasks is completed, render this list style: -->
+                <% if (task.task_state === true) { %>
+                <li class="list-group-item task-complete">
+                  <span class="btn-group">
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>/complete?_method=PUT&n=<%= n %>"
+                      method="POST"
+                    >
+                      <input class="mr-1" type="submit" value="✔️" />
+                    </form>
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>?_method=DELETE&n=<%= n %>"
+                      method="POST"
+                    >
+                      <input class="mr-3" type="submit" value="🗑️" />
+                    </form>
+                  </span>
+                  <%= task.task %>
+                </li>
+                <% } else { %>
+                <!-- if not, render this list style: -->
+                <li class="list-group-item">
+                  <span class="btn-group">
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>/complete?_method=PUT&n=<%= n %>"
+                      method="POST"
+                    >
+                      <input class="mr-1" type="submit" name="complete" value="⭕" />
+                    </form>
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>?_method=DELETE&n=<%= n %>"
+                      method="POST"
+                    >
+                      <input class="mr-3" type="submit" name="delete" value="🗑️" />
+                    </form>
+                  </span>
+                  <%= task.task %>
+                </li>
+                <!-- close 'completed state' if else -->
+                <% } %>
+                <!-- close 'date comparison' if else -->
+                <% } %>
+                <!-- close 'tasks iteration' forEach -->
+                <% }) %>
+              </ul>
+              <!-- close 'list checking' if else -->
+              <% } %>
+              <form class="w-100" action="/tasks/<%= date.date %>?n=<%= n %>" method="POST">
+                <input
+                  class="list-group-item form-control py-4"
+                  type="text"
+                  id="todo"
+                  name="todo"
+                  placeholder=""
+                />
+              </form>
+              <!-- close row -->
+            </div>
+            <!-- close col -->
+          </div>
+          <% }) %>
+          <!-- div for right button -->
+          <div class="text-center col-1">
+            <button class="btn btn-outline-primary mr-3" type="button" onclick="plusN()">➡️</button>
+          </div>
+          <!-- close row -->
+        </div>
+        <!-- close small container -->
+      </div>
+
+      <!-- THIS CONTAINER IS FOR THE OTHER LISTS -->
+      <div class="container-flex">
+        <!-- select from 'list_users' by 'user_id', and inner join to 'lists' -->
+        <!-- for the first two lists, create one column each -->
+        <!-- buttons on the side to show next / previous list columns -->
+        <div class="row">
+          <!-- div for left button -->
+          <div class="text-center col-1">
+            <button
+              class="btn btn-outline-primary mr-3"
+              type="button"
+              onclick="minusM(<%= lists.length %>)"
+            >
+              ⬅️
+            </button>
+          </div>
+          <!-- create variable o to be changed according to number of sub lists -->
+          <% let o = 5; %>
+          <!-- if there are less than 5 lists -->
+          <% if (lists.length < 5) { %>
+          <!-- o should be the number of lists -->
+          <% o = lists.length; %> <% } %>
+          <!-- iterate through m + o number of columns -->
+          <!-- this relies on the fact that after we delete any list -->
+          <!-- we reset m to 0 when we load /tasks -->
+          <% for (let i = m; i < m + o; i += 1) { %>
+          <!-- create divs for each list name -->
+          <div class="col-2">
+            <span class="btn-group">
+              <form class="" action="/list/edit/<%= lists[i].list_id %>" method="GET">
+                <input class="mr-2" type="submit" value="✏️" />
+              </form>
+              <h5><%= lists[i].list_name %></h5>
+            </span>
+            <div class="row mt-3">
+              <!-- if there are tasks to be displayed and don't belong in a list -->
+              <% if (lists_tasks.length !== 0) { %>
+              <ul class="list-group w-100">
+                <!-- iterate through each task in the array -->
+                <% lists_tasks.forEach((task) => { %>
+                <!-- check that the list_id on the task matches the current list_id -->
+                <% if (task.list_id === lists[i].list_id) { %>
+                <!-- if tasks is completed, render this list style: -->
+                <% if (task.task_state === true) { %>
+                <li class="list-group-item task-complete">
+                  <span class="btn-group">
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>/complete?_method=PUT&n=<%= n %>"
+                      method="POST"
+                    >
+                      <input class="mr-1" type="submit" value="✔️" />
+                    </form>
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>?_method=DELETE&n=<%= n %>"
+                      method="POST"
+                    >
+                      <input class="mr-3" type="submit" value="🗑️" />
+                    </form>
+                  </span>
+                  <%= task.task %>
+                </li>
+                <% } else { %>
+                <!-- if not, render this list style: -->
+                <li class="list-group-item">
+                  <span class="btn-group">
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>/complete?_method=PUT&n=<%= n %>"
+                      method="POST"
+                    >
+                      <input class="mr-1" type="submit" name="complete" value="⭕" />
+                    </form>
+                    <form
+                      class=""
+                      action="/tasks/<%= task.task_id %>?_method=DELETE&n=<%= n %>"
+                      method="POST"
+                    >
+                      <input class="mr-3" type="submit" name="delete" value="🗑️" />
+                    </form>
+                  </span>
+                  <%= task.task %>
+                </li>
+                <!-- close 'completed state' if else -->
+                <% } %>
+                <!-- close 'list_id comparison' if else -->
+                <% } %>
+                <!-- close 'tasks iteration' forEach -->
+                <% }) %>
+              </ul>
+              <!-- close 'list checking' if else -->
+              <% } %>
+              <form class="w-100" action="/tasks/<%= lists[i].list_id %>?n=<%= n %>" method="POST">
+                <input
+                  class="list-group-item form-control py-4"
+                  type="text"
+                  id="todo"
+                  name="todo"
+                  placeholder=""
+                />
+              </form>
+              <!-- close row -->
+            </div>
+            <!-- close col -->
+          </div>
+
+          <% } %>
+          <!-- div for right button -->
+          <div class="text-center col-1">
+            <button
+              class="btn btn-outline-primary mb-1"
+              type="button"
+              onclick="plusM(<%= lists.length %>)"
+            >
+              ➡️
+            </button>
+            <br />
+            <button
+              class="btn btn-outline-primary"
+              type="button"
+              onclick="window.location.href='/list/create'"
+            >
+              ➕
+            </button>
+          </div>
+          <!-- close row -->
+        </div>
+        <!-- close small container -->
+      </div>
+      <!-- close big container -->
+    </div>
+    <%- include('partials/scripts.ejs') %>
+  </body>
+</html>
