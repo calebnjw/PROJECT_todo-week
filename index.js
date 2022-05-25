@@ -97,6 +97,8 @@ const getHashed = (input) => {
 // route: home------------------- //
 // ------------------------------ //
 app.get('/', (request, response) => {
+  // the default route will redirect to tasks
+  // tasks will then redirect to login if user is not logged in
   response.redirect('/tasks');
 });
 
@@ -105,7 +107,6 @@ app.get('/', (request, response) => {
 // ------------------------------ //
 app.get('/signup', (request, response) => {
   console.log('GET: SIGNUP');
-
   response.render('signup');
 });
 
@@ -143,7 +144,6 @@ app.post('/signup', (request, response) => {
 // ------------------------------ //
 app.get('/login', (request, response) => {
   console.log('GET: LOGIN');
-
   response.render('login');
 });
 
@@ -200,22 +200,17 @@ app.use((request, response, next) => {
 // route: todo------------------- //
 // ------------------------------ //
 app.get('/tasks', (request, response) => {
+  // using middleware to check if user is logged in
   if (request.isUserLoggedIn) {
     console.log('GET: TASKS');
 
-    // first get task lists with user ID and store as separate key:value pair (use inner join)
-    // then get inner join of all tasks with list names
-    // in EJS: 
-    // display all columns for all lists with inputs
-    // display button to create new lists and add users
-    // if task has list name then show in list
-
-    // these values are used to 'scroll' between dates / lists
+    // if there is no query value for n and m, we set them to 0
+    // if there is, then we set it to the value given
     const n = !request.query.n ? 0 : Number(request.query.n); // for dates
     const m = !request.query.m ? 0 : Number(request.query.m); // for lists
-
     const { userID, userName } = request.cookies;
 
+    const output = { n, m, userName };
     const listQuery = `SELECT list_users.user_id, lists.list_id, lists.list_name 
       FROM list_users
       INNER JOIN lists
@@ -223,33 +218,31 @@ app.get('/tasks', (request, response) => {
       WHERE list_users.user_id=$1
       ORDER BY lists.list_id;`;
 
-    // output variable to store data from all queries
-    // this output is sent to response.render after all queries are done
-    const output = { n, m, userName };
-
-    pool.query(listQuery, [userID]) // query to get list of lists
+    // query to get list of lists which are associated with the current user
+    pool.query(listQuery, [userID])
       .then((result) => {
         output.lists = result.rows;
       }).then(() => {
-        // this query only gets results with a list_id attached (regardless of user_id)
         const getListTodoQuery = `SELECT * 
-          FROM tasks
-          WHERE list_id IS NOT NULL
-          ORDER BY task_id;`;
+        FROM tasks
+        WHERE list_id IS NOT NULL
+        ORDER BY task_id;`;
 
-        pool.query(getListTodoQuery) // query to get list of tasks that are attached to lists
+        // this query only gets tasks with a list_id associated (regardless of user_id)
+        // because tasks in shared lists should show up for other users as well
+        pool.query(getListTodoQuery)
           .then((result) => {
             output.lists_tasks = result.rows;
           }).then(() => {
-            // this query only gets results where there is no list_id
             const getDateTodoQuery = `SELECT * FROM tasks
-              WHERE user_id=$1 AND list_id IS NULL
-              ORDER BY task_id;`;
+            WHERE user_id=$1 AND list_id IS NULL
+            ORDER BY task_id;`;
 
-            pool.query(getDateTodoQuery, [userID]) // query to get list of tasks that are attached to dates
+            // this query only gets tasks where there is no list_id
+            pool.query(getDateTodoQuery, [userID])
               .then((result) => {
                 output.dates_tasks = result.rows;
-                output.dates = [ // create the variable dates
+                output.dates = [ // create variable dates
                   {
                     weekday: today.plus({ days: n - 1 }).toLocaleString(dayFormat),
                     date: today.plus({ days: n - 1 }).setLocale('en-GB').toLocaleString(dateFormat)
@@ -273,37 +266,37 @@ app.get('/tasks', (request, response) => {
                 ];
 
                 response.render('tasks', output);
-
               })
               .catch((error => {
                 console.log(error);
                 response.send(error);
               }));
-
           })
           .catch((error => {
             console.log(error);
             response.send(error);
           }));
-
       })
       .catch((error => {
         console.log(error);
         response.send(error);
       }));
-
   } else {
+    // if not logged in, send to login page
     console.log('Not logged in, redirecting to login page.')
     response.status(403).redirect('login');
   };
 });
 
+// ------------------------------ //
+// route: adding todos----------- //
+// ------------------------------ //
+// todo by date
 app.post('/tasks/:day/:month/:year', (request, response) => { // creating new task
   console.log('POST: TASKS');
 
   const n = !request.query.n ? 0 : Number(request.query.n); // for dates
   const m = !request.query.m ? 0 : Number(request.query.m); // for lists
-
   const { month, day, year } = request.params;
   const date = `${day}/${month}/${year}`;
   const { userID } = request.cookies;
@@ -326,12 +319,12 @@ app.post('/tasks/:day/:month/:year', (request, response) => { // creating new ta
     }));
 });
 
+// todo by list
 app.post('/tasks/:list_id', (request, response) => { // creating new task
   console.log('POST: TASKS');
 
   const n = !request.query.n ? 0 : Number(request.query.n); // for dates
   const m = !request.query.m ? 0 : Number(request.query.m); // for lists
-
   const { list_id } = request.params;
   const { userID } = request.cookies;
   const { todo } = request.body;
@@ -353,12 +346,12 @@ app.post('/tasks/:list_id', (request, response) => { // creating new task
     }));
 });
 
+// completing task
 app.put('/tasks/:task_id/complete', (request, response) => { // editing existing task
   console.log('PUT: TASKS');
 
   const n = !request.query.n ? 0 : Number(request.query.n); // for dates
   const m = !request.query.m ? 0 : Number(request.query.m); // for lists
-
   const { task_id } = request.params;
 
   const checkCompleteQuery = `SELECT task_state FROM tasks WHERE task_id=$1;`;
@@ -384,12 +377,12 @@ app.put('/tasks/:task_id/complete', (request, response) => { // editing existing
     }));
 });
 
+// deleting task
 app.delete('/tasks/:task_id', (request, response) => { // delete existing task
   console.log('DEL: TASKS');
 
   const n = !request.query.n ? 0 : Number(request.query.n); // for dates
   const m = !request.query.m ? 0 : Number(request.query.m); // for lists
-
   const { task_id } = request.params;
 
   const deleteTodoQuery = `DELETE FROM tasks WHERE task_id=$1;`;
@@ -409,13 +402,15 @@ app.delete('/tasks/:task_id', (request, response) => { // delete existing task
 });
 
 // ------------------------------ //
-// route: create / edit lists---- //
+// route: lists------------------ //
 // ------------------------------ //
-// get create list
+// create list
 app.get('/list/create', (request, response) => {
   console.log('GET: LIST CREATE');
 
-  response.render('list-create');
+  const { userName } = request.cookies;
+
+  response.render('list-create', { userName });
 });
 
 app.post('/list/create', (request, response) => {
@@ -452,24 +447,17 @@ app.post('/list/create', (request, response) => {
 
 });
 
-// get edit list
+// edit list
 app.get('/list/edit/:list_id', (request, response) => {
   console.log('GET: LIST EDIT');
 
-  const currentUser = Number(request.cookies.userID);
+  const { userID: currentUser, userName } = request.cookies;
   const { list_id } = request.params;
 
-  const output = { currentUser, list_id };
+  const output = { currentUser, userName, list_id };
   const listQuery = `SELECT list_name 
     FROM lists
     WHERE lists.list_id=$1;`;
-
-  // get list name using list_id
-  // then get list of users + user_id
-  // in ejs: 
-  // render a form that will lead to 
-  // should render each user in the list as a list group 
-  // with delete user button
 
   pool.query(listQuery, [list_id])
     .then((result) => {
@@ -502,15 +490,13 @@ app.get('/list/edit/:list_id', (request, response) => {
     }));
 });
 
-// to change list name
+// change list name
 app.put('/list/rename/:list_id', (request, response) => {
   console.log('POST: LIST EDIT');
 
   const { list_id } = request.params;
   const { list_name } = request.body;
 
-  // update value of list_name at list_id
-  // UPDATE [table] SET[column] = [value] WHERE[column] = [value];
   const updateNameQuery = `UPDATE lists 
     SET list_name=$1 
     WHERE list_id=$2;`;
@@ -526,23 +512,18 @@ app.put('/list/rename/:list_id', (request, response) => {
     }));
 });
 
-// to add users
+// add users
 app.put('/list/add/:list_id/', (request, response) => {
   console.log('POST: LIST EDIT - ADD USER')
 
-  const currentUser = Number(request.cookies.userID);
+  const { userID: currentUser } = request.cookies;
   const { list_id } = request.params;
   const { username } = request.body;
-  // to add users: 
-  // look for username entered,
-  // if it exists, get user_id
-  // create association in list_users
-  // if not, say user does not exist
 
   const userQuery = `SELECT user_id FROM users WHERE username=$1;`
+
   pool.query(userQuery, [username])
     .then((result) => {
-      console.log(result.rows);
       if (result.rows.length === 0) {
         console.log('No user found');
         response.status(403).send('No user with that username found.');
@@ -573,13 +554,12 @@ app.put('/list/add/:list_id/', (request, response) => {
     }));
 });
 
-// to delete users (sub form)
+// delete users (sub form)
 app.delete('/list/delete/:list_id/:user_id', (request, response) => {
   console.log('POST: LIST EDIT - ADD USER')
 
   const { list_id, user_id } = request.params;
 
-  // delete user_id from list_user where list_id = list_id
   const deleteUserQuery = `DELETE FROM list_users
     WHERE list_id=$1
     AND user_id=$2;`;
@@ -595,12 +575,11 @@ app.delete('/list/delete/:list_id/:user_id', (request, response) => {
     }));
 });
 
+// delete list
 app.delete('/list/delete/:list_id', (request, response) => {
   console.log('DELETE: LIST')
 
   const { list_id } = request.params;
-  // delete list_id from lists
-  // delete list_id from list_users
 
   const deleteQuery = `
     DELETE FROM lists WHERE list_id='${list_id}';
@@ -623,11 +602,10 @@ app.delete('/logout', (request, response) => { // delete existing task
   if (request.isUserLoggedIn) {
     response.clearCookie('loggedIn');
     response.clearCookie('userID');
+    response.clearCookie('userName');
   }
 
-  setTimeout(() => { // set timeout because sometimes the page doesn't refresh properly
-    response.redirect('/login')
-  }, 50);
+  response.redirect('/login')
 });
 
 // ------------------------------ //

@@ -2,3 +2,11 @@
   color: lightgray;
   text-decoration: line-through;
 }
+
+.container-date {
+  height: 40vh;
+}
+
+.container-date-full {
+  height: 85vh;
+}
