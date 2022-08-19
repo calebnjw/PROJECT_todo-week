@@ -46,7 +46,6 @@ import jsSHA from 'jssha';
 
 /* postgres */
 import pg from 'pg';
-import e from 'express';
 
 /* create express app */
 const app = express();
@@ -230,52 +229,42 @@ app.get('/tasks', (request, response) => {
 
         // this query only gets tasks with a list_id associated (regardless of user_id)
         // because tasks in shared lists should show up for other users as well
-        pool.query(getListTodoQuery)
-          .then((result) => {
-            output.lists_tasks = result.rows;
-          }).then(() => {
-            const getDateTodoQuery = `SELECT * FROM tasks
+        return pool.query(getListTodoQuery)
+      }).then((result) => {
+        output.lists_tasks = result.rows;
+      }).then(() => {
+        const getDateTodoQuery = `SELECT * FROM tasks
             WHERE user_id=$1 AND list_id IS NULL
             ORDER BY task_id;`;
 
-            // this query only gets tasks where there is no list_id
-            pool.query(getDateTodoQuery, [userID])
-              .then((result) => {
-                output.dates_tasks = result.rows;
-                output.dates = [ // create variable dates
-                  {
-                    weekday: today.plus({ days: n - 1 }).toLocaleString(dayFormat),
-                    date: today.plus({ days: n - 1 }).setLocale('en-GB').toLocaleString(dateFormat)
-                  },
-                  {
-                    weekday: today.plus({ days: n }).toLocaleString(dayFormat),
-                    date: today.plus({ days: n }).setLocale('en-GB').toLocaleString(dateFormat)
-                  },
-                  {
-                    weekday: today.plus({ days: n + 1 }).toLocaleString(dayFormat),
-                    date: today.plus({ days: n + 1 }).setLocale('en-GB').toLocaleString(dateFormat)
-                  },
-                  {
-                    weekday: today.plus({ days: n + 2 }).toLocaleString(dayFormat),
-                    date: today.plus({ days: n + 2 }).setLocale('en-GB').toLocaleString(dateFormat)
-                  },
-                  {
-                    weekday: today.plus({ days: n + 3 }).toLocaleString(dayFormat),
-                    date: today.plus({ days: n + 3 }).setLocale('en-GB').toLocaleString(dateFormat)
-                  }
-                ];
+        // this query only gets tasks where there is no list_id
+        return pool.query(getDateTodoQuery, [userID])
+      }).then((result) => {
+        output.dates_tasks = result.rows;
+        output.dates = [ // create variable dates
+          {
+            weekday: today.plus({ days: n - 1 }).toLocaleString(dayFormat),
+            date: today.plus({ days: n - 1 }).setLocale('en-GB').toLocaleString(dateFormat)
+          },
+          {
+            weekday: today.plus({ days: n }).toLocaleString(dayFormat),
+            date: today.plus({ days: n }).setLocale('en-GB').toLocaleString(dateFormat)
+          },
+          {
+            weekday: today.plus({ days: n + 1 }).toLocaleString(dayFormat),
+            date: today.plus({ days: n + 1 }).setLocale('en-GB').toLocaleString(dateFormat)
+          },
+          {
+            weekday: today.plus({ days: n + 2 }).toLocaleString(dayFormat),
+            date: today.plus({ days: n + 2 }).setLocale('en-GB').toLocaleString(dateFormat)
+          },
+          {
+            weekday: today.plus({ days: n + 3 }).toLocaleString(dayFormat),
+            date: today.plus({ days: n + 3 }).setLocale('en-GB').toLocaleString(dateFormat)
+          }
+        ];
 
-                response.render('tasks', output);
-              })
-              .catch((error => {
-                console.log(error);
-                response.send(error);
-              }));
-          })
-          .catch((error => {
-            console.log(error);
-            response.send(error);
-          }));
+        response.render('tasks', output);
       })
       .catch((error => {
         console.log(error);
@@ -435,16 +424,15 @@ app.post('/list/create', (request, response) => {
         VALUES ($1, $2);`;
 
       pool.query(addUserQuery, [user_id, list_id])
-        .then(() => {
-          console.log('Added user to list.');
-          response.redirect(`/list/edit/${list_id}`);
-        });
+      return list_id; // can return other stuff into the next .then as well. 
+    }).then((list_id) => {
+      console.log('Added user to list.');
+      response.redirect(`/list/edit/${list_id}`);
     })
     .catch((error => {
       console.log(error);
       response.send(error);
     }));
-
 });
 
 // edit list
